@@ -1,51 +1,86 @@
 const list = document.getElementById('todo-list')
 const itemCountSpan = document.getElementById('item-count')
 const uncheckedCountSpan = document.getElementById('unchecked-count')
+const DB_URL = "https://lab-todo-list-default-rtdb.europe-west1.firebasedatabase.app/todos.json";
+const loading = document.getElementById('loading');
+const error = document.getElementById('error');
 
-let todos = JSON.parse(localStorage.getItem('todos')) || [
-    {
-      id: 1,
-      text: 'Вивчити HTML',
-      checked: true
-    },
-    {
-      id: 2,
-      text: 'Вивчити CSS',
-      checked: true
-    },
-    {
-      id: 3,
-      text: 'Вивчити JavaScript',
-      checked: false
+let todos =  [];
+  
+  
+async function loadTodos() {
+
+  loading.innerText = "Завантаження..."
+  error.innerText = ""
+
+  try {
+
+    const response = await fetch(DB_URL);
+    const data = await response.json();
+
+    todos = [];
+
+    if (data) {
+      for (const id in data) {
+        todos.push({
+          id: id,
+          text: data[id].text,
+          checked: data[id].checked
+        });
+      }
     }
-  ]
-  
 
-  function saveTodos() {
-    localStorage.setItem('todos', JSON.stringify(todos))
+    render();
+    updateCounter();
+
+  } catch (err) {
+
+    error.innerText = "Помилка завантаження";
+
   }
-  
 
-  function newTodo() {
+  loading.innerText = "";
+}
+
+
+async function addTodo(todo) {
+  const response = await fetch(DB_URL, {
+    method: 'POST',
+    body: JSON.stringify(todo),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  return await response.json();
+}
+
+
+  async function newTodo() {
   
     const text = prompt('Введіть нову справу')
   
-    if (text === null || text === '') {
-      return
-    }
+    if (!text) return;
+
+    const todo = { text: text, checked: false }; 
+
   
-    const todo = {
-      id: Date.now(),
-      text: text,
-      checked: false
-    }
-  
-    todos.push(todo)
-  
-    saveTodos()
-    render()
-    updateCounter()
-  }
+    const response = await fetch(DB_URL, {
+    method: 'POST',
+    body: JSON.stringify(todo),
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const result = await addTodo(todo);
+
+  todos.push({
+    id: result.name,
+    text: text,
+    checked: false
+  });
+
+  render();
+  updateCounter();
+}
   
 
   function renderTodo(todo) {
@@ -66,7 +101,7 @@ let todos = JSON.parse(localStorage.getItem('todos')) || [
           class="form-check-input me-2"
           id="${todo.id}"
           ${checkedAttribute}
-          onchange="checkTodo(${todo.id})"
+          onchange="checkTodo('${todo.id}')"
         >
   
         <label for="${todo.id}">
@@ -77,7 +112,7 @@ let todos = JSON.parse(localStorage.getItem('todos')) || [
   
         <button
           class="btn btn-danger btn-sm float-end"
-          onclick="deleteTodo(${todo.id})"
+          onclick="deleteTodo('${todo.id}')"
         >
           delete
         </button>
@@ -117,7 +152,13 @@ let todos = JSON.parse(localStorage.getItem('todos')) || [
   }
   
 
-  function deleteTodo(id) {
+  async function deleteTodo(id) {
+    await fetch(
+      `https://lab-todo-list-default-rtdb.europe-west1.firebasedatabase.app/todos/${id}.json`,
+    {
+      method: "DELETE"
+    }
+    );
   
     let newTodos = []
   
@@ -131,27 +172,37 @@ let todos = JSON.parse(localStorage.getItem('todos')) || [
   
     todos = newTodos
   
-    saveTodos()
     render()
     updateCounter()
   }
   
 
-  function checkTodo(id) {
+  async function checkTodo(id) {
   
     for (let i = 0; i < todos.length; i++) {
   
       if (todos[i].id === id) {
         todos[i].checked = !todos[i].checked
+
+
+        await fetch(
+          `https://lab-todo-list-default-rtdb.europe-west1.firebasedatabase.app/todos/${id}.json`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              checked: todos[i].checked
+            })
+          }
+        );
       }
   
     }
   
-    saveTodos()
     render()
     updateCounter()
   }
   
-
-  render()
-  updateCounter()
+  loadTodos();
